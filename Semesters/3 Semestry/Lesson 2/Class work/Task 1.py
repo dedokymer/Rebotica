@@ -8,7 +8,7 @@ while True:
     a = random.randint(10,90)
 
     b = random.randint(10, 90)
-    op = random.choice(("+", "-"))
+    op = random.hoice(("+", "-"))
     if op == "+":
         ans = a+b
         user = input(f"{a}+{b} = ")

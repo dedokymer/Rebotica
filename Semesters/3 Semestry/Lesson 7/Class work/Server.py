@@ -1,3 +1,4 @@
+import math
 import socket
 import time
 import psycopg2
@@ -132,7 +133,7 @@ colors = ['Maroon', 'DarkRed', 'FireBrick', 'Red', 'Salmon', 'Tomato', 'Coral', 
           'DarkOrange', 'Orange', 'DarkGoldenrod', 'Goldenrod', 'Gold', 'Olive', 'Yellow', 'YellowGreen', 'GreenYellow',
           'Chartreuse', 'LawnGreen', 'Green', 'Lime', 'Lime Green', 'SpringGreen', 'MediumSpringGreen', 'Turquoise',
           'LightSeaGreen', 'MediumTurquoise', 'Teal', 'DarkCyan', 'Aqua', 'Cyan', 'Dark Turquoise', 'DeepSkyBlue',
-          'DodgerBlue', 'RoyalBlue', 'Navy', 'DarkBlue', 'MediumBlue.']
+          'DodgerBlue', 'RoyalBlue', 'Navy', 'DarkBlue', 'MediumBlue']
 mob_quality = 25
 names = RussianNames(count=mob_quality * 2, surname=False, patronymic=False, rare=True)
 names = list(set(names))
@@ -176,33 +177,35 @@ for i in range(mob_quality):
     localmob = Localplayer(servermob.id, None, servermob.name, None).load()
     players[servermob.id] = localmob
 # Игровой цикл
-
+tick = -1
 while serverwork:
     clock.tick(FPS)
+    tick += 1
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             serverwork = False
-    try:
-        # проверяем желающих войти в игру
-        new_socket, addr = main_socket.accept()  # принимаем входящие
-        print('Подключился', addr)
-        new_socket.setblocking(False)
-        login = new_socket.recv(1024).decode()
-        player = Player("Сеня", addr)
-        if login.startswith("color"):
-            data = find_color(login[6:])
-            player.name, player.color = data
-        s.merge(player)
-        s.commit()
-        addr = f"({addr[0]},{addr[1]})"
-        data = s.query(Player).filter(Player.address == addr)
-        for user in data:
-            player = Localplayer(user.id, addr, "Сеня", new_socket).load()
-            players[user.id] = player
+    if tick %200 == 0:
+        try:
+            # проверяем желающих войти в игру
+            new_socket, addr = main_socket.accept()  # принимаем входящие
+            print('Подключился', addr)
+            new_socket.setblocking(False)
+            login = new_socket.recv(1024).decode()
+            player = Player("Сеня", addr)
+            if login.startswith("color"):
+                data = find_color(login[6:])
+                player.name, player.color = data
+            s.merge(player)
+            s.commit()
+            addr = f"({addr[0]},{addr[1]})"
+            data = s.query(Player).filter(Player.address == addr)
+            for user in data:
+                player = Localplayer(user.id, addr, "Сеня", new_socket).load()
+                players[user.id] = player
 
 
-    except BlockingIOError:
-        pass
+        except BlockingIOError:
+            pass
     visible_bacteries = {}
     for id in list(players):
         visible_bacteries[id] = []
@@ -218,6 +221,10 @@ while serverwork:
             # i-й игрок видит j-того
             if abs(dist_x) <= hero_1.w_vision // 2 + hero_2.size and abs(dist_y) <= hero_1.h_vision // 2 + hero_2.size:
                 if hero_1.address is not None:
+                    distance = math.sqrt(dist_x**2+dist_y**2)
+                    if distance <= hero_1.size and hero_1.size > hero_2.size*1.1:
+                        hero_2.size, hero_2.speedx, hero_2.speedy = 0,0,0
+
                     x_ = str(round(dist_x))
                     y_ = str(round(dist_y))  # временные
                     size_ = str(round(hero_2.size))
@@ -228,6 +235,11 @@ while serverwork:
                 # j-й игрок видит i-того
             if abs(dist_x) <= hero_2.w_vision // 2 + hero_1.size and abs(
                     dist_y) <= hero_2.h_vision // 2 + hero_1.size:
+
+                distance = math.sqrt(dist_x ** 2 + dist_y ** 2)
+                if distance <= hero_2.size and hero_2.size > hero_1.size * 1.1:
+                    hero_1.size, hero_1.speedx, hero_1.speedy = 0, 0, 0
+
                 if hero_2.address is not None:
                     x_ = str(round(-dist_x))
                     y_ = str(round(-dist_y))  # временные
@@ -238,8 +250,15 @@ while serverwork:
 
     for id in list(players):
         visible_bacteries[id] = "<" + ",".join(visible_bacteries[id]) + ">"
-    ########################################################################################################################
 
+    ########################################################################################################################
+    for id in list(players):
+        if players[id].errors >= 500 or players[id].size == 0:
+            if players[id].sock is not None:
+                players[id].sock.close()
+            del players[id]
+            s.query(Player).filter(Player.id == id).delete()
+            s.commit()
     # Считываем команды игроков
     for id in list(players):
         if players[id].sock is not None:
@@ -249,6 +268,11 @@ while serverwork:
                 players[id].change_speed(data)
             except:
                 pass
+        else:
+            if tick %400 == 0:
+                vector = f"<{random.uniform(-1, 1)},{random.uniform(-1, 1)}>"
+                players[id].change_speed(vector)
+
     # Отправка игрокам поля
     for id in list(players):
         if players[id].sock is not None:

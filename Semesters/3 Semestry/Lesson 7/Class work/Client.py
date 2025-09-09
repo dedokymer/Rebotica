@@ -6,7 +6,7 @@ from tkinter import ttk
 import tkinter.messagebox
 name = ""
 color = ""
-colors = ['Maroon', 'DarkRed', 'FireBrick', 'Red', 'Salmon', 'Tomato', 'Coral', 'OrangeRed', 'Chocolate', 'SandyBrown', 'DarkOrange', 'Orange', 'DarkGoldenrod', 'Goldenrod', 'Gold', 'Olive', 'Yellow', 'YellowGreen', 'GreenYellow', 'Chartreuse', 'LawnGreen', 'Green', 'Lime', 'Lime Green', 'SpringGreen', 'MediumSpringGreen', 'Turquoise', 'LightSeaGreen', 'MediumTurquoise', 'Teal', 'DarkCyan', 'Aqua', 'Cyan', 'Dark Turquoise', 'DeepSkyBlue', 'DodgerBlue', 'RoyalBlue', 'Navy', 'DarkBlue', 'MediumBlue.']
+colors = ['Maroon', 'DarkRed', 'FireBrick', 'Red', 'Salmon', 'Tomato', 'Coral', 'OrangeRed', 'Chocolate', 'SandyBrown', 'DarkOrange', 'Orange', 'DarkGoldenrod', 'Goldenrod', 'Gold', 'Olive', 'Yellow', 'YellowGreen', 'GreenYellow', 'Chartreuse', 'LawnGreen', 'Green', 'Lime', 'Lime Green', 'SpringGreen', 'MediumSpringGreen', 'Turquoise', 'LightSeaGreen', 'MediumTurquoise', 'Teal', 'DarkCyan', 'Aqua', 'Cyan', 'DarkTurquoise', 'DeepSkyBlue', 'DodgerBlue', 'RoyalBlue', 'Navy', 'DarkBlue', 'MediumBlue']
 def scroll(event):
     global color
     color = color_box.get()
@@ -14,7 +14,7 @@ def scroll(event):
 def Vxod():
     global name
     name = row.get()
-    if name and color:
+    if name and color and len(name) >= 4:
         root.destroy()
         root.quit()
     else:
@@ -90,12 +90,15 @@ while run:
             msg = f"<{vector[0]},{vector[1]}>"
             sock.send(msg.encode())
     data = sock.recv(1024).decode()
-    print("Получил:", data)
     data = find(data).split(",")
     screen.fill("orange")
-    pygame.draw.circle(screen, color, CC, radius)
     if data != ['']:
-        draw_bacteries(data)
+        radius = int(data[0])
+        draw_bacteries(data[1:])
+
+    pygame.draw.circle(screen, color, CC, radius)
+
     pygame.display.flip()
+
 
 pygame.quit()

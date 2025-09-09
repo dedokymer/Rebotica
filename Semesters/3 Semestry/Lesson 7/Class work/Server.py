@@ -54,6 +54,8 @@ class Localplayer():
             vector = vector[0] * self.absspeed, vector[1] * self.absspeed
             self.speedx = vector[0]
             self.speedy = vector[1]
+    def new_speed(self):
+        self.absspeed = 10/ math.sqrt(self.size)
 
     def sync(self):
         self.db.size = self.size
@@ -121,6 +123,13 @@ class Localplayer():
             self.y += self.speedy
 
 
+class Food:
+    def __init__(self, x, y, size, color):
+        self.x = x
+        self.y = y
+        self.size = size
+        self.color = color
+
 base.metadata.create_all(engine)
 pygame.init()
 WIDHT_ROOM, HEIGHT_ROOM = 4000, 4000
@@ -132,13 +141,17 @@ FPS = 100
 colors = ['Maroon', 'DarkRed', 'FireBrick', 'Red', 'Salmon', 'Tomato', 'Coral', 'OrangeRed', 'Chocolate', 'SandyBrown',
           'DarkOrange', 'Orange', 'DarkGoldenrod', 'Goldenrod', 'Gold', 'Olive', 'Yellow', 'YellowGreen', 'GreenYellow',
           'Chartreuse', 'LawnGreen', 'Green', 'Lime', 'Lime Green', 'SpringGreen', 'MediumSpringGreen', 'Turquoise',
-          'LightSeaGreen', 'MediumTurquoise', 'Teal', 'DarkCyan', 'Aqua', 'Cyan', 'Dark Turquoise', 'DeepSkyBlue',
+          'LightSeaGreen', 'MediumTurquoise', 'Teal', 'DarkCyan', 'Aqua', 'Cyan', 'DarkTurquoise', 'DeepSkyBlue',
           'DodgerBlue', 'RoyalBlue', 'Navy', 'DarkBlue', 'MediumBlue']
-mob_quality = 25
-names = RussianNames(count=mob_quality * 2, surname=False, patronymic=False, rare=True)
+MOB_QUALITY = 25
+FOOD_SIZE = 15
+FOOD_QUALITY = WIDHT_ROOM * HEIGHT_ROOM // 40000
+names = RussianNames(count=MOB_QUALITY * 2, surname=False, patronymic=False, rare=True)
 names = list(set(names))
 
-
+Foods = []
+for i in range(FOOD_QUALITY):
+    Foods.append(Food(random.randint(0, WIDHT_ROOM), random.randint(0, HEIGHT_ROOM), FOOD_SIZE, random.choice(colors)))
 def find(vector: str):
     first = None
     for num, sign in enumerate(vector):
@@ -164,7 +177,7 @@ def find_color(info: str):
 
 players = {}
 serverwork = True
-for i in range(mob_quality):
+for i in range(MOB_QUALITY):
     servermob = Player(names[i], None)
     servermob.color = random.choice(colors)
     servermob.x = random.randint(0, WIDHT_ROOM)
@@ -212,6 +225,25 @@ while serverwork:
 
     pairs = list(players.items())
     for i in range(0, len(pairs)):
+        for food in Foods:
+            hero:Localplayer = pairs[i][1]
+            dist_x = food.x - hero.x
+            dist_y = food.y - hero.y
+            if abs(dist_x) <= hero.w_vision // 2 + food.size and abs(dist_y) <= hero.h_vision // 2 + food.size:
+                distance = math.sqrt(dist_x ** 2 + dist_y ** 2 )
+                if distance < hero.size:
+                    hero.size = math.sqrt(hero.size ** 2 + food.size ** 2 )
+                    hero.new_speed()
+                    food.size = 0
+                    Foods.remove(food)
+                if hero.address is not None and food.size != 0:
+                    x_ = str(round(dist_x))
+                    y_ = str(round(dist_y))  # временные
+                    size_ = str(round(food.size))
+                    color_ = food.color
+                    data = x_ + " " + y_ + " " + size_ + " " + color_
+                    visible_bacteries[hero.id].append(data)
+
         for j in range(i + 1, len(pairs)):
             hero_1: Localplayer = pairs[i][1]
             hero_2: Localplayer = pairs[j][1]
@@ -220,10 +252,12 @@ while serverwork:
 
             # i-й игрок видит j-того
             if abs(dist_x) <= hero_1.w_vision // 2 + hero_2.size and abs(dist_y) <= hero_1.h_vision // 2 + hero_2.size:
+                distance = math.sqrt(dist_x ** 2 + dist_y ** 2)
+                if distance <= hero_1.size and hero_1.size > hero_2.size * 1.1:
+                    hero_1.size = math.sqrt(hero_1.size ** 2 + hero_2.size ** 2 )
+                    hero_1.new_speed()
+                    hero_2.size, hero_2.speedx, hero_2.speedy = 0, 0, 0
                 if hero_1.address is not None:
-                    distance = math.sqrt(dist_x**2+dist_y**2)
-                    if distance <= hero_1.size and hero_1.size > hero_2.size*1.1:
-                        hero_2.size, hero_2.speedx, hero_2.speedy = 0,0,0
 
                     x_ = str(round(dist_x))
                     y_ = str(round(dist_y))  # временные
@@ -238,6 +272,8 @@ while serverwork:
 
                 distance = math.sqrt(dist_x ** 2 + dist_y ** 2)
                 if distance <= hero_2.size and hero_2.size > hero_1.size * 1.1:
+                    hero_2.size = math.sqrt(hero_2.size ** 2 + hero_1.size ** 2 )
+                    hero_2.new_speed()
                     hero_1.size, hero_1.speedx, hero_1.speedy = 0, 0, 0
 
                 if hero_2.address is not None:
@@ -249,9 +285,12 @@ while serverwork:
                     visible_bacteries[hero_2.id].append(data)
 
     for id in list(players):
+        r = str(round(players[id].size))
+        visible_bacteries[id] = [r] + visible_bacteries[id]
         visible_bacteries[id] = "<" + ",".join(visible_bacteries[id]) + ">"
 
     ########################################################################################################################
+
     for id in list(players):
         if players[id].errors >= 500 or players[id].size == 0:
             if players[id].sock is not None:
@@ -279,11 +318,8 @@ while serverwork:
             try:
                 players[id].sock.send(visible_bacteries[id].encode())
             except:
-                players[id].sock.close()
-                del players[id]
-                s.query(Player).filter(Player.id == id).delete()
-                s.commit()
-                print("Сокет закрыт")
+                players[id].errors += 1
+
     screen.fill("black")
     for id in players:
         player = players[id]

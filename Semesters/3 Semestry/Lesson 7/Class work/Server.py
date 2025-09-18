@@ -100,6 +100,7 @@ class Localplayer():
         self.color = "red"
         self.w_vision = 800
         self.h_vision = 600
+        self.L = 1
 
     def update(self):
         # х координата
@@ -121,13 +122,24 @@ class Localplayer():
                 self.y += self.speedy  # то двигаем его
         else:  # Если игрок находится в границе комнаты
             self.y += self.speedy
-
+        if self.size >= self.w_vision / 4:
+            if self.w_vision <= WIDHT_ROOM or self.h_vision:
+                self.L *= 2
+                self.w_vision = 800 * self.L
+                self.h_vision = 600 * self.L
+        if self.size <= self.w_vision / 8 and self.size <= self.h_vision / 8:
+            if self.L > 1:
+                self.L //= 2
+                self.w_vision = 800 * self.L
+                self.h_vision = 600 * self.L
+        if self.size >= 100:
+            self.size -= self.size / 18000
 
 class Food:
     def __init__(self, x, y, size, color):
         self.x = x
         self.y = y
-        self.size = size
+        self. size = size
         self.color = color
 
 base.metadata.create_all(engine)
@@ -189,6 +201,7 @@ for i in range(MOB_QUALITY):
     s.commit()
     localmob = Localplayer(servermob.id, None, servermob.name, None).load()
     players[servermob.id] = localmob
+
 # Игровой цикл
 tick = -1
 while serverwork:
@@ -219,6 +232,30 @@ while serverwork:
 
         except BlockingIOError:
             pass
+        #Мобы
+        ################################################################################################################################################
+        need = MOB_QUALITY - len(players)
+        if need > 0:
+            names = RussianNames(count = need * 2, patronymic=False, surname=False, rare=True)
+            names = list(set(names))
+            for i in range (need):
+                server_mob = Player(names[i], None)
+                server_mob.color = random.choice(colors)
+                spawn = random.choice(Foods)
+                Foods.remove(spawn) 
+                server_mob.x, server_mob.y = spawn.x, spawn.y
+                server_mob.size = random.randint(10, 100 )
+                s.add(server_mob)
+                s.commit()
+                localmob = Localplayer(server_mob.id,None, server_mob.name, None,).load()
+                localmob.new_speed()
+                players[server_mob.id] = localmob
+        #Еда
+        ################################################################################################################################################
+        need = FOOD_QUALITY - len(Foods)
+        for i in range(need):
+            Foods.append(Food(random.randint(0, WIDHT_ROOM), random.randint(0, HEIGHT_ROOM), FOOD_SIZE, random.choice(colors)))
+
     visible_bacteries = {}
     for id in list(players):
         visible_bacteries[id] = []
@@ -237,9 +274,9 @@ while serverwork:
                     food.size = 0
                     Foods.remove(food)
                 if hero.address is not None and food.size != 0:
-                    x_ = str(round(dist_x))
-                    y_ = str(round(dist_y))  # временные
-                    size_ = str(round(food.size))
+                    x_ = str(round(dist_x / hero.L))
+                    y_ = str(round(dist_y / hero.L))  # временные
+                    size_ = str(round(food.size / hero.L))
                     color_ = food.color
                     data = x_ + " " + y_ + " " + size_ + " " + color_
                     visible_bacteries[hero.id].append(data)
@@ -259,11 +296,14 @@ while serverwork:
                     hero_2.size, hero_2.speedx, hero_2.speedy = 0, 0, 0
                 if hero_1.address is not None:
 
-                    x_ = str(round(dist_x))
-                    y_ = str(round(dist_y))  # временные
-                    size_ = str(round(hero_2.size))
+                    x_ = str(round(dist_x / hero_1.L))
+                    y_ = str(round(dist_y / hero_1.L))  # временные
+                    size_ = str(round(hero_2.size / hero_1.L))
                     color_ = hero_2.color
+                    name_ = hero_2.name
                     data = x_ + " " + y_ + " " + size_ + " " + color_
+                    if hero_2.size >= 30 * hero_1.L:
+                        data += " " + name_
                     visible_bacteries[hero_1.id].append(data)
 
                 # j-й игрок видит i-того
@@ -277,16 +317,22 @@ while serverwork:
                     hero_1.size, hero_1.speedx, hero_1.speedy = 0, 0, 0
 
                 if hero_2.address is not None:
-                    x_ = str(round(-dist_x))
-                    y_ = str(round(-dist_y))  # временные
-                    size_ = str(round(hero_1.size))
+                    x_ = str(round(-dist_x / hero_2.L))
+                    y_ = str(round(-dist_y / hero_2.L))  # временные
+                    size_ = str(round(hero_1.size / hero_2.L))
                     color_ = hero_1.color
+                    name_ = hero_1.color
                     data = x_ + " " + y_ + " " + size_ + " " + color_
+                    if hero_1.size >= 30 * hero_2.L:
+                        data += " " + name_
                     visible_bacteries[hero_2.id].append(data)
 
     for id in list(players):
-        r = str(round(players[id].size))
-        visible_bacteries[id] = [r] + visible_bacteries[id]
+        r = str(round(players[id].size / players[id].L))
+        y = str(round(players[id].y / players[id].L))
+        x = str(round(players[id].x / players[id].L))
+        L = str(round(players[id].L))
+        visible_bacteries[id] = [f"{r} {x} {y} {L}"] + visible_bacteries[id]
         visible_bacteries[id] = "<" + ",".join(visible_bacteries[id]) + ">"
 
     ########################################################################################################################
